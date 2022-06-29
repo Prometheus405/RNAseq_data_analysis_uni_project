@@ -1,0 +1,267 @@
+library(limma)
+library(RNAseq123)
+
+# Read-in the data:
+rc = read.table("stud_data.txt", header=TRUE, sep="\t", row.names=1)
+si = read.table("design.csv", sep = "\t", header=TRUE)
+data = DGEList(rc, group=si$condition)
+
+cpm = cpm(data)
+lcpm = (cpm(data, log = TRUE))
+
+#Removing genes that are lowly expressed
+table(rowSums(data$counts==0)==9)
+keep.expr = filterByExpr(data)
+
+data = data[keep.expr,,keep.lib.sizes=FALSE]
+dim(data)
+
+#All normalization methods 
+cpm_none = calcNormFactors(data, method = "none")
+cpm_TMM = calcNormFactors(data, method = "TMM")
+cpm_TMMwsp = calcNormFactors(data, method = "TMMwsp")
+cpm_RLE = calcNormFactors(data, method = "RLE")
+cpm_upperquartile = calcNormFactors(data, method = "upperquartile")
+
+#All normalization methods with log data
+lcpm_none = cpm(cpm_none, log=TRUE)
+lcpm_TMM = cpm(cpm_TMM, log=TRUE)
+lcpm_TMMwsp = cpm(cpm_TMMwsp, log=TRUE)
+lcpm_RLE = cpm(cpm_RLE, log=TRUE)
+lcpm_upperquartile = cpm(cpm_upperquartile, log=TRUE)
+
+#box plots normalized 
+#NONE
+png('box_plot_none.png')
+boxplot(lcpm_none, col='green', las=3, main='')
+title(main= 'Normalised data, method=none', ylab= 'Log-cpm' )
+dev.off()
+
+#TMM
+png('box_plot_TMM.png')
+boxplot(lcpm_TMM, col='green', las=3, main='')
+title(main= 'Normalised data, method=TMM', ylab= 'Log-cpm' )
+dev.off()
+
+#TMMwsp
+png('box_plot_TMMwsp.png')
+boxplot(lcpm_TMMwsp, col='green', las=3, main='')
+title(main= 'Normalised data, method=TMMwsp', ylab= 'Log-cpm' )
+dev.off()
+
+#RLE
+png('box_plot_RLE.png')
+boxplot(lcpm_RLE, col='green', las=3, main='')
+title(main= 'Normalised data, method=RLE', ylab= 'Log-cpm' )
+dev.off()
+
+#upperquartile
+png('box_plot_upperquartile.png')
+boxplot(lcpm_upperquartile, col='green', las=3, main='')
+title(main= 'Normalised data, method=upperquartile', ylab= 'Log-cpm' )
+dev.off()
+
+#unsupervised clustering of samples
+plotMDS(lcpm_none)
+plotMDS(lcpm_TMM)
+plotMDS(lcpm_TMMwsp)
+plotMDS(lcpm_RLE)
+plotMDS(lcpm_upperquartile)
+
+
+#DGE analysis comparing wild type and mutant samples and show the top 100 DE genes on heatmap for each of normalization methods:
+#NONE 
+design_none = model.matrix(~0 + group, data = cpm_none$samples)
+colnames(design_none) = levels(cpm_none$samples$group)
+
+#TMM
+design_TMM = model.matrix(~0 + group, data = cpm_TMM$samples)
+colnames(design_TMM) = levels(cpm_TMM$samples$group)
+
+#TMMwsp
+design_TMMwsp = model.matrix(~0 + group, data = cpm_TMMwsp$samples)
+colnames(design_TMMwsp) = levels(cpm_TMMwsp$samples$group)
+
+#RLE
+design_RLE = model.matrix(~0 + group, data = cpm_RLE$samples)
+colnames(design_RLE) = levels(cpm_RLE$samples$group)
+
+#Upperquartile 
+design_upperquartile = model.matrix(~0 + group, data = cpm_upperquartile$samples)
+colnames(design_upperquartile) = levels(cpm_upperquartile$samples$group)
+
+
+#Contr Matrix
+#NONE
+contr_none = makeContrasts(WTvsMT = WT - MT,levels = colnames(design_none))
+
+#TMM
+contr_TMM = makeContrasts(WTvsMT = WT - MT,levels = colnames(design_TMM))
+
+#TMMwsp
+contr_TMMwsp = makeContrasts(WTvsMT = WT - MT,levels = colnames(design_TMMwsp))
+
+#RLE
+contr_RLE = makeContrasts(WTvsMT = WT - MT,levels = colnames(design_RLE))
+
+#upperquartile
+contr_upperquartile = makeContrasts(WTvsMT = WT - MT,levels = colnames(design_upperquartile))
+
+
+#voom step 
+v_none = voom(cpm_none, design_none, plot=TRUE)
+v_TMM = voom(cpm_TMM, design_TMM, plot=TRUE)
+v_TMMwsp = voom(cpm_TMMwsp, design_TMMwsp, plot=TRUE)
+v_RLE = voom(cpm_RLE, design_RLE, plot=TRUE)
+v_upperquartile = voom(cpm_upperquartile, design_upperquartile, plot=TRUE)
+
+#vfit
+#none 
+vfit_none = lmFit(v_none, design_none)
+vfit_none = contrasts.fit(vfit_none, contrasts = contr_none)
+efit_none = eBayes(vfit_none)
+plotSA(efit_none, main="Final model: Mean-variance trend")
+
+#TMM
+vfit_TMM = lmFit(v_TMM, design_TMM)
+vfit_TMM = contrasts.fit(vfit_TMM, contrasts = contr_TMM)
+efit_TMM = eBayes(vfit_TMM)
+plotSA(efit_TMM, main="Final model: Mean-variance trend")
+
+#TMMwsp
+vfit_TMMwsp = lmFit(v_TMMwsp, design_TMMwsp)
+vfit_TMMwsp = contrasts.fit(vfit_TMMwsp, contrasts = contr_TMMwsp)
+efit_TMMwsp = eBayes(vfit_none)
+plotSA(efit_TMMwsp, main="Final model: Mean-variance trend")
+
+#RLE
+vfit_RLE = lmFit(v_RLE, design_RLE)
+vfit_RLE = contrasts.fit(vfit_RLE, contrasts = contr_RLE)
+efit_RLE = eBayes(vfit_RLE)
+plotSA(efit_RLE, main="Final model: Mean-variance trend")
+
+#upperquartile
+vfit_upperquartile = lmFit(v_upperquartile, design_upperquartile)
+vfit_upperquartile = contrasts.fit(vfit_upperquartile, contrasts = contr_upperquartile)
+efit_upperquartile = eBayes(vfit_upperquartile)
+plotSA(efit_upperquartile, main="Final model: Mean-variance trend")
+
+#tfit step: 
+#tfit_none:
+tfit_none <- treat(vfit_none, lfc=1)
+dt_none <- decideTests(tfit_none)
+summary(dt_none)
+
+#tfit_TMM:
+tfit_TMM <- treat(vfit_TMM, lfc=1)
+dt_TMM <- decideTests(tfit_TMM)
+summary(dt_TMM)
+
+#tfit_TMMwsp:
+tfit_TMMwsp <- treat(vfit_TMMwsp, lfc=1)
+dt_TMMwsp <- decideTests(tfit_TMMwsp)
+summary(dt_TMMwsp)
+
+#RLE
+tfit_RLE <- treat(vfit_RLE, lfc=1)
+dt_RLE <- decideTests(tfit_RLE)
+summary(dt_RLE)
+
+#upperquartile
+tfit_upperquartile <- treat(vfit_upperquartile, lfc=1)
+dt_upperquartile <- decideTests(tfit_upperquartile)
+summary(dt_upperquartile)
+
+
+#SUMMARY AND COMAPRISION(efit) 
+#none
+summary_none = summary(decideTests(efit_none))
+summary_none
+comparison_none = topTreat(efit_none, coef=1, n=Inf)
+plotMD(efit_none,column=1,status=dt_none[,1],values = c(-1,1), hl.col=c("blue","red"),main=colnames(efit_none)[1], xlim=c(-8,13))
+abline(h=0,col="green")
+
+#TMM
+summary_TMM = summary(decideTests(efit_TMM))
+summary_TMM
+comparison_TMM = topTreat(efit_TMM, coef=1, n=Inf)
+plotMD(efit_TMM,column=1,status=dt_TMM[,1],values = c(-1,1), hl.col=c("blue","red"),main=colnames(efit_TMM)[1], xlim=c(-8,13))
+abline(h=0,col="green")
+
+#TMMwsp
+summary_TMMwsp = summary(decideTests(efit_TMMwsp))
+summary_TMMwsp
+comparison_TMMwsp = topTreat(efit_TMMwsp, coef=1, n=Inf)
+plotMD(efit_TMMwsp,column=1,status=dt_TMMwsp[,1],values = c(-1,1), hl.col=c("blue","red"),main=colnames(efit_TMMwsp)[1], xlim=c(-8,13))
+abline(h=0,col="green")
+
+#RLE
+summary_RLE = summary(decideTests(efit_RLE))
+summary_RLE
+comparison_RLE = topTreat(efit_RLE, coef=1, n=Inf)
+plotMD(efit_RLE,column=1,status=dt_RLE[,1],values = c(-1,1), hl.col=c("blue","red"),main=colnames(efit_RLE)[1], xlim=c(-8,13))
+abline(h=0,col="green")
+
+#upperquartile
+summary_upperquartile = summary(decideTests(efit_upperquartile))
+summary_upperquartile
+comparison_upperquartile = topTreat(efit_upperquartile, coef=1, n=Inf)
+plotMD(efit_upperquartile,column=1,status=dt_upperquartile[,1],values = c(-1,1), hl.col=c("blue","red"),main=colnames(efit_upperquartile)[1], xlim=c(-8,13))
+abline(h=0,col="green")
+
+
+library(gplots)
+#PDF file
+#none
+com.top_none = rownames(efit_none)[1:100]
+i_none = which(rownames(v_none$E) %in% com.top_none)
+mycol = colorpanel(1000, 'green', 'white', 'blue')
+png('RNAseq_none_v2.png')
+heatmap.2(lcpm_none[i_none,], scale="row",labRow=rownames(v_none$E[i_none]), labCol=colnames(v_none$E), col=mycol, trace="none", density.info="none", margin=c(8,6), lhei=c(2,10), dendrogram="column")
+dev.off()
+
+#TMM
+com.top_TMM = rownames(efit_TMM)[1:100]
+i_TMM = which(rownames(v_TMM$E) %in% com.top_TMM)
+mycol = colorpanel(1000, 'green', 'white', 'blue')
+png('RNAseq_TMM.png')
+heatmap.2(lcpm_TMM[i_TMM,], scale="row",labRow=rownames(v_TMM$E[i_TMM]), labCol=colnames(v_TMM$E), col=mycol, trace="none", density.info="none", margin=c(8,6), lhei=c(2,10), dendrogram="column")
+dev.off()
+
+#TMMwsp
+com.top_TMMwsp = rownames(efit_TMMwsp)[1:100]
+i_TMMwsp = which(rownames(v_TMMwsp$E) %in% com.top_TMMwsp)
+mycol = colorpanel(1000, 'green', 'white', 'blue')
+png('RNAseq_TMMwsp.png')
+heatmap.2(lcpm_TMMwsp[i_none,], scale="row",labRow=rownames(v_TMMwsp$E[i_none]), labCol=colnames(v_TMMwsp$E), col=mycol, trace="none", density.info="none", margin=c(8,6), lhei=c(2,10), dendrogram="column")
+dev.off()
+
+#RLE
+com.top_RLE = rownames(efit_RLE)[1:100]
+i_RLE = which(rownames(v_RLE$E) %in% com.top_RLE)
+mycol = colorpanel(1000, 'green', 'white', 'blue')
+png('RNAseq_RLE.png')
+heatmap.2(lcpm_RLE[i_RLE,], scale="row",labRow=rownames(v_none$E[i_RLE]), labCol=colnames(v_RLE$E), col=mycol, trace="none", density.info="none", margin=c(8,6), lhei=c(2,10), dendrogram="column")
+dev.off()
+
+#upperquartile
+com.top_upperquartile = rownames(efit_upperquartile)[1:100]
+i_upperquartile = which(rownames(v_upperquartile$E) %in% com.top_upperquartile)
+mycol = colorpanel(1000, 'green', 'white', 'blue')
+png('RNAseq_upperquartile.png')
+heatmap.2(lcpm_upperquartile[i_upperquartile,], scale="row",labRow=rownames(v_none$E[i_upperquartile]), labCol=colnames(v_upperquartile$E), col=mycol, trace="none", density.info="none", margin=c(8,6), lhei=c(2,10), dendrogram="column")
+dev.off()
+
+
+
+
+#top table: 
+topTable(efit_none, n =5)
+
+topTable(efit_TMM, n =5)
+
+topTable(efit_TMMwsp, n =5)
+
+topTable(efit_RLE, n =5)
+
+topTable(efit_upperquartile, n =5)
